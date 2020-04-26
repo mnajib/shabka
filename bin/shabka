@@ -348,6 +348,40 @@ pushToCachix() {
   echoSuccess "Finished pushing all hosts to Cachix ${binary_cache_name}"
 }
 
+doExec() {
+  desc="Execute a command
+        Usage: doExec <host> <release> <command> [command arguments]
+        Requires shabka_path and dotshabka_path to be set."
+
+  local -r host="${1}"
+  local release="${2}"
+  shift 2
+  local distrib
+  local configPath
+
+  if [[ ! -e "${dotshabka_path}/secrets" ]]; then
+    echoWarn "${dotshabka_path}/secrets does not exist."
+  fi
+
+  distrib="$( getHostDistrib "${host}" )" || exit "${?}"
+
+  if [[ -z "${release:-}" ]]; then
+    echoDebug2 "Release not set, setting it from the host's."
+    release="$( getHostRelease "${host}" )" || exit "${?}"
+  else
+    echoDebug2 "Using provided release."
+    release="${release}"
+  fi
+
+  export NIX_PATH="$( getNixPath "${release}" "${distrib}" )" || exit "${?}"
+
+  configPath="$( getConfigPath "${host}" )" || exit "${?}"
+  export NIX_PATH="${NIX_PATH}:nixos-config=${configPath}"
+
+  RELEASE="release-${release/./-}" \
+    "${@}"
+}
+
 main() {
   if [[ "$#" -eq 0 ]]; then
     echoUsage
@@ -417,6 +451,9 @@ main() {
       shift 1
 
       pushToCachix "${binary_cache_name}" "${release}" "${@}"
+      ;;
+    "exec")
+      doExec "${host}" "${release}" "${@}"
       ;;
     *)
       echoErr "Unkown command: ${command}"
